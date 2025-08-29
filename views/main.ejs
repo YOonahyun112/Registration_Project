@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <style>
+  .hidden-course {
+    display: none;
+  }
+</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>수강신청</title>
+  <link rel="stylesheet" href="mainstyle.css">
+  <script src="mainscript.js" defer></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>수강신청</h1>
+      <div class="user-info">
+        <span id="userDisplay">사용자 정보 로딩 중...</span>
+        <button class="logout-btn" onclick="logout()">로그아웃</button>
+      </div>
+    </header>
+
+    <nav class="tab-menu">
+      <button class="tab-btn active" data-tab="courses">개설과목</button>
+      <button class="tab-btn" data-tab="wishlist">희망과목</button>
+      <button class="tab-btn" data-tab="retake">재수강과목</button>
+    </nav>
+
+      <!-- 개설과목 탭 -->
+    <section id="courses" class="tab-content active">
+      <div class="search-container">
+        <form class="search-box">
+          <div class="search-bar">
+            <label>개설 교과목 조회</label>
+            <select>
+              <option>학과(학부)</option>
+            </select>
+            <select>
+              <option>전공</option>
+              <option>교양</option>
+            </select>
+            <select>
+              <option>학년</option>
+            </select>
+            <button type="button">조회</button>
+          </div>
+
+          <div class="search-divider"></div>
+
+          <div class="search-bar">
+            <label>키워드 조회</label>
+            <input type="text" id="keywordInput" placeholder="과목명 또는 과목코드 입력">
+            <button type="button" onclick="handleKeywordSearch()">조회</button>
+          </div>
+          
+        </form>
+      </div>
+      <h3 class="section-title">개설과목</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>영역</th>
+            <th>희망</th>
+            <th>학년</th>
+            <th>교과목명</th>
+            <th>신청</th>
+            <th>과목코드</th>
+            <th>학점</th>
+            <th>분반</th>
+            <th>교수명</th>
+            <th>요일 및 시간</th>
+            <th>강의실</th>
+          </tr>
+        </thead>
+         <tbody id="course-list"> 
+      </tbody> 
+      </table>
+    </section>
+
+    <!-- 희망과목 탭 -->
+    <section id="wishlist" class="tab-content">
+      <h3 class="section-title">희망 과목</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>영역</th>
+            <th>희망</th>
+            <th>학년</th>
+            <th>교과목명</th>
+            <th>신청</th>
+            <th>과목코드</th>
+            <th>학점</th>
+            <th>분반</th>
+            <th>교수명</th>
+            <th>요일 및 시간</th>
+            <th>강의실</th>
+          </tr>
+        </thead>
+        <tbody id="wishlist-list">
+          <!-- 위시리스트 데이터 예시 -->
+        </tbody>
+      </table>
+    </section>
+
+    <!--재수강과목 탭-->
+    <section id="retake" class="tab-content">
+  <h3 class="section-title">재수강 과목</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>영역</th>
+        <th>희망</th>
+        <th>학년</th>
+        <th>교과목명</th>
+        <th>신청</th>
+        <th>과목코드</th>
+        <th>학점</th>
+        <th>분반</th>
+        <th>교수명</th>
+        <th>요일 및 시간</th>
+        <th>강의실</th>
+      </tr>
+    </thead>
+    <tbody id="retake-list"></tbody>
+  </table>
+</section>
+
+    <!-- 수강 확정 내역(시간표) 섹션을 탭 외부에 배치하여 모든 탭에서 보이도록 함 -->
+    <section id="confirmed-courses">
+      <h3 class="section-title">수강 확정 내역 (시간표)</h3>
+      <div class="search-container">
+        <!-- search-container와 동일한 크기를 위해 감싸기 -->
+        <table id="timetable">
+          <thead>
+            <tr>
+              <th>시간</th>
+              <th>월</th>
+              <th>화</th>
+              <th>수</th>
+              <th>목</th>
+              <th>금</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- JavaScript에서 generateTimetable()으로 행 생성 -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

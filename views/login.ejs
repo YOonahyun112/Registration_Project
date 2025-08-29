@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>한서대학교 수강신청</title>
+    <link rel="stylesheet" href="loginstyle.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>한서대학교 수강신청</h1>
+        </header>
+        <div class="main-content">
+            <div class="left-panel">
+                <button class="info-btn">2025학년도 1학기 수강신청 안내</button>
+                <img src="logo_hanseo.png" alt="한서대학교 로고" class="logo">
+            </div>
+            <div class="divider"></div>
+            <div class="right-panel">
+                <form onsubmit="validateForm(event)" class="login-box">
+                    <div class="input-group">
+                        <img src="user-icon.png" alt="학번 아이콘" class="input-icon">
+                        <input type="text" id="studentId" placeholder="학번" required>
+                    </div>
+                    <div class="input-group">
+                        <img src="lock-icon.png" alt="비밀번호 아이콘" class="input-icon">
+                        <input type="password" id="password" placeholder="비밀번호" required>
+                    </div>
+                    <button type="submit" class="login-btn">로그인</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function validateForm(event) {
+            event.preventDefault();
+            console.log("✅ validateForm 실행됨");
+
+            const formData = {
+                studentId: document.getElementById("studentId").value,
+                password: document.getElementById("password").value,
+            };
+
+            fetch('/loginProc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log("📨 응답:", data);
+
+                if (data.success) {
+                    localStorage.setItem("username", data.username);
+                    localStorage.setItem("userType", data.userType);
+                    localStorage.setItem("studentId", formData.studentId);
+                    localStorage.setItem("department", data.userdepartment);
+                    window.location.href = "/main";
+
+                    alert(data.message);
+                    if (data.userType == "student") {
+                        window.location.href = "/main";
+                    } else if (data.userType == "professor") {
+                        window.location.href = "/pmain";
+                    }
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                console.error("❌ 오류:", error);
+                alert("로그인 실패");
+            });
+        }
+    </script>
+</body>
+</html>

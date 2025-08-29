@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>한서 E출석부</title>
+  <link rel="stylesheet" href="style_classCheck.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <div class="top-bar">
+    <span>한서 E출석부</span>
+    <div class="top-right">
+      <span id="today-date"></span>
+      <button class="logout-btn" onclick="logout()">로그아웃</button>
+    </div>
+  </div>
+<!-- 다 임의로 넣음-->
+<div class="sidebar">
+  <!--<img src="professor.jpg" alt="Professor" class="professor-img">-->
+  <span id="professorname"></span>
+  <p class="semester-info">2025학년도 1학기</p>
+  <h3>- 담당 강의 선택</h3>
+  <select class="lecture-select" onchange="lectureSelected()">
+    <option value="">강의를 선택하세요</option>
+  </select>
+  <a href="#" class="course-application-link" onclick="openCourseApplication()">- 강의 신청</a>
+</div>
+
+<div class="content">
+  <h2>환영합니다!</h2>
+  <p>강의를 선택하면 이곳에 상세 정보가 표시됩니다.</p>
+</div>
+
+
+  <!-- 출석 확인 모달 -->
+  <div id="attendanceModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeAttendancePopup()">&times;</span>
+      <h2 id="modal-title">학생 출석 확인</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>주차</th>
+            <th>출결 상태</th>
+          </tr>
+        </thead>
+        <tbody id="attendanceBody">
+          <!-- 1주차 ~ 16주차 행은 JS에서 동적으로 생성 -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="script_classCheck.js"></script>
+</body>
+</html>
