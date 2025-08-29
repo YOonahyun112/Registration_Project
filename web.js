@@ -154,15 +154,24 @@ web.get('/manage-attendance', (req, res) => {
   console.log('변경된 courseCode:', courseCode);
 
   // 1단계: 학생 정보 조회
-  const studentSql = `
-    SELECT s.S_ID, s.NAME, s.YEAR_GRADE, s.DEPARTMENT
-    FROM student s
-    JOIN c_r cr ON s.S_ID = cr.S_ID_CR  
-    JOIN course c ON cr.COURSE_ID_CR = c.ID
-    WHERE c.COURSE_CODE = ? 
-      AND c.CLASS_SECTION = ? 
-      AND cr.STATUS = '신청';
-  `;
+const studentSql = `
+  SELECT s.S_ID, s.NAME, s.YEAR_GRADE, s.DEPARTMENT,
+         CASE 
+           WHEN EXISTS (
+             SELECT 1 FROM achievement a
+             JOIN course c2 ON a.COURSE_ID_ACH = c2.ID
+             WHERE a.S_ID_ACH = s.S_ID 
+               AND c2.COURSE_CODE = c.COURSE_CODE 
+               AND a.TOT < 70
+           ) THEN 1 ELSE 0
+         END AS IS_RETAKE
+  FROM student s
+  JOIN c_r cr ON s.S_ID = cr.S_ID_CR  
+  JOIN course c ON cr.COURSE_ID_CR = c.ID
+  WHERE c.COURSE_CODE = ? 
+    AND c.CLASS_SECTION = ? 
+    AND cr.STATUS = '신청';
+`;
 
   db.query(studentSql, [courseCode, section], (err, studentResults) => {
     if (err) {
@@ -575,7 +584,9 @@ web.post('/submit-achievement', async (req, res) => {
 
           const courseId = courseRow[0].ID;
 
-          // 학점 계산 로직
+          // -------------------------------
+          // 1. 학점 계산
+          // -------------------------------
           let grade = 'F';
           if (g.att === 0) {
             grade = 'F';
@@ -592,31 +603,55 @@ web.post('/submit-achievement', async (req, res) => {
             else grade = 'F';
           }
 
-          db.query(
-            `SELECT * FROM achievement WHERE COURSE_ID_ACH = ? AND S_ID_ACH = ? AND P_ID_ACH = ?`,
-            [courseId, g.studentId, g.professorId],
-            (err, exist) => {
-              if (err) return console.error(err);
+          // -------------------------------
+          // 2. 재수강 여부 확인 → A+ 제한
+          // -------------------------------
+          const retakeSql = `
+            SELECT 1
+            FROM achievement a
+            JOIN course c2 ON a.COURSE_ID_ACH = c2.ID
+            WHERE a.S_ID_ACH = ?
+              AND c2.COURSE_CODE = ?
+              AND a.TOT < 70
+            LIMIT 1
+          `;
 
-              if (exist.length > 0) {
-                db.query(
-                  `UPDATE achievement 
-                   SET ATT = ?, MIDTERM = ?, FINAL = ?, ASSIGNMENT = ?, TOT = ?, GRADE = ? 
-                   WHERE COURSE_ID_ACH = ? AND S_ID_ACH = ? AND P_ID_ACH = ?`,
-                  [g.att, g.midterm, g.finalExam, g.assignment, g.total, grade, courseId, g.studentId, g.professorId],
-                  (err) => { if (err) console.error(err); }
-                );
-              } else {
-                db.query(
-                  `INSERT INTO achievement 
-                   (ATT, MIDTERM, FINAL, ASSIGNMENT, TOT, GRADE, COURSE_ID_ACH, S_ID_ACH, P_ID_ACH)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                  [g.att, g.midterm, g.finalExam, g.assignment, g.total, grade, courseId, g.studentId, g.professorId],
-                  (err) => { if (err) console.error(err); }
-                );
-              }
+          db.query(retakeSql, [g.studentId, g.courseCode], (err, retakeRows) => {
+            if (!err && retakeRows.length > 0 && grade === 'A+') {
+              grade = 'A'; // 재수강이면 A+ → A로 제한
             }
-          );
+
+            // -------------------------------
+            // 3. 기존 성적 존재 여부 확인 후 UPDATE/INSERT
+            // -------------------------------
+            db.query(
+              `SELECT * FROM achievement WHERE COURSE_ID_ACH = ? AND S_ID_ACH = ? AND P_ID_ACH = ?`,
+              [courseId, g.studentId, g.professorId],
+              (err, exist) => {
+                if (err) return console.error(err);
+
+                if (exist.length > 0) {
+                  // UPDATE
+                  db.query(
+                    `UPDATE achievement 
+                     SET ATT = ?, MIDTERM = ?, FINAL = ?, ASSIGNMENT = ?, TOT = ?, GRADE = ? 
+                     WHERE COURSE_ID_ACH = ? AND S_ID_ACH = ? AND P_ID_ACH = ?`,
+                    [g.att, g.midterm, g.finalExam, g.assignment, g.total, grade, courseId, g.studentId, g.professorId],
+                    (err) => { if (err) console.error(err); }
+                  );
+                } else {
+                  // INSERT
+                  db.query(
+                    `INSERT INTO achievement 
+                     (ATT, MIDTERM, FINAL, ASSIGNMENT, TOT, GRADE, COURSE_ID_ACH, S_ID_ACH, P_ID_ACH)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [g.att, g.midterm, g.finalExam, g.assignment, g.total, grade, courseId, g.studentId, g.professorId],
+                    (err) => { if (err) console.error(err); }
+                  );
+                }
+              }
+            );
+          });
         }
       );
     }
@@ -627,6 +662,7 @@ web.post('/submit-achievement', async (req, res) => {
     res.json({ success: false });
   }
 });
+
 
 // 학생의 과거 성적을 포함한 전체 과목 목록 조회
 // studentId를 쿼리 파라미터로 받아 해당 학생의 성적 정보를 함께 반환합니다.

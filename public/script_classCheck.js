@@ -105,7 +105,9 @@ function manageAttendance() {
               const existingStatus = attendanceData.find(a => a.S_ID === student.S_ID)?.status || "";
               return `
                 <tr>
-                  <td>${student.NAME}</td>
+                  <td>
+                  ${student.NAME}${student.IS_RETAKE ? ' <span style="color:red; font-size:0.8em;">(재)</span>' : ''}
+                  </td>
                   <td>${student.S_ID}</td>
                   <td>${student.YEAR_GRADE}</td>
                   <td>${student.DEPARTMENT}</td>
@@ -558,7 +560,9 @@ function manageGrades() {
 
               return `
                 <tr>
-                  <td>${student.NAME}</td>
+                  <td>
+                  ${student.NAME}${student.IS_RETAKE ? ' <span style="color:red; font-size:0.8em;">(재)</span>' : ''}
+                  </td>
                   <td>${student.S_ID}</td>
                   <td>${student.YEAR_GRADE}</td>
                   <td>${student.DEPARTMENT}</td>
