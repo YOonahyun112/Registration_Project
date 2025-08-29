@@ -13,6 +13,10 @@ document.addEventListener("DOMContentLoaded", function() {
 
             this.classList.add("active");
             document.getElementById(this.dataset.tab).classList.add("active");
+
+             if (button.dataset.tab === "retake") {
+            loadRetakeCourses();
+            }
         });
     });
 
@@ -269,139 +273,220 @@ function generateTimetable() {
 }
 
 // 위시리스트(희망과목) 관련 함수들
-
+function updateWishlistInAllTabs(courseCode, section, isWished) {
+  const selector = `tr[data-code="${courseCode}"][data-section="${section}"] .wishlist-btn`;
+  document.querySelectorAll(selector).forEach(btn => {
+    if (isWished) {
+      btn.textContent = "♥";
+      btn.classList.add("active");
+      btn.setAttribute("onclick", "removeFromWishlist(this)");
+    } else {
+      btn.textContent = "♡";
+      btn.classList.remove("active");
+      btn.setAttribute("onclick", "addToWishlist(this)");
+    }
+  });
+}
+// 서버에서 wishlist 불러오기
 // 서버에서 wishlist 불러오기
 async function loadWishlist() {
-    const studentId = localStorage.getItem("studentId");
-    const wishlistList = document.getElementById("wishlist-list");
-    wishlistList.innerHTML = "";
+  const studentId = localStorage.getItem("studentId");
+  const wishlistList = document.getElementById("wishlist-list");
+  wishlistList.innerHTML = "";
 
-    try {
-        const res = await fetch(`/wishlist?studentId=${studentId}`);
-        const data = await res.json();
-        if (!data.success) throw new Error("불러오기 실패");
+  try {
+    const res = await fetch(`/wishlist?studentId=${studentId}`);
+    const data = await res.json();
+    if (!data.success) throw new Error("불러오기 실패");
 
-        const enrollmentStatus = JSON.parse(localStorage.getItem("enrollmentStatus") || '{}');
+    const enrollmentStatus = JSON.parse(localStorage.getItem("enrollmentStatus") || '{}');
+    const wishlistMap = {};
 
-        data.wishlist.forEach(item => {
-            const row = document.querySelector(`#course-list tr[data-code="${item.COURSE_CODE}"][data-section="${item.CLASS_SECTION}"]`);
-            if (row) {
-                const newRow = row.cloneNode(true);
-                newRow.classList.remove("hidden-course");  // 여기 추가
+    data.wishlist.forEach(item => {
+      const key = `${item.COURSE_CODE}-${item.CLASS_SECTION}`;
+      wishlistMap[key] = true;
 
-                const uniqueId = `${item.COURSE_CODE}_${item.CLASS_SECTION}`;
-                newRow.setAttribute("data-unique-id", uniqueId);
+      // ✅ 모든 탭 동기화
+      updateWishlistInAllTabs(item.COURSE_CODE, item.CLASS_SECTION, true);
 
-                // wishlist 버튼 수정
-                const wishlistBtn = newRow.querySelector(".wishlist-btn");
-                wishlistBtn.textContent = "♥";
-                wishlistBtn.classList.add("active");
-                wishlistBtn.setAttribute("onclick", "removeFromWishlist(this)");
+      // 희망 탭에 추가
+      const row = document.querySelector(
+        `#course-list tr[data-code="${item.COURSE_CODE}"][data-section="${item.CLASS_SECTION}"]`
+      );
+      if (row) {
+        const newRow = row.cloneNode(true);
+        newRow.setAttribute("data-unique-id", `${item.COURSE_CODE}_${item.CLASS_SECTION}`);
 
-                // 수강신청 상태 체크박스 반영
-                const checkbox = newRow.querySelector("input[type='checkbox']");
-                if (checkbox) {
-                    const key = `${item.COURSE_CODE}-${item.CLASS_SECTION}`;
-                    checkbox.checked = enrollmentStatus[key] === "신청";
-                }
+        // 버튼 ♥ 로
+        const wishlistBtn = newRow.querySelector(".wishlist-btn");
+        wishlistBtn.textContent = "♥";
+        wishlistBtn.classList.add("active");
+        wishlistBtn.setAttribute("onclick", "removeFromWishlist(this)");
 
-                wishlistList.appendChild(newRow);
+        // 체크박스 반영
+        const checkbox = newRow.querySelector("input[type='checkbox']");
+        if (checkbox) {
+          checkbox.checked = enrollmentStatus[key] === "신청";
+        }
 
-                // 개설과목에도 상태 반영
-                const origBtn = row.querySelector(".wishlist-btn");
-                if (origBtn) {
-                    origBtn.textContent = "♥";
-                    origBtn.classList.add("active");
-                }
-            }
-        });
+        wishlistList.appendChild(newRow);
+      }
+    });
 
-    } catch (error) {
-        console.error("wishlist 불러오기 실패:", error);
-    }
+    localStorage.setItem("wishlistMap", JSON.stringify(wishlistMap));
+  } catch (error) {
+    console.error("wishlist 불러오기 실패:", error);
+  }
 }
 
 
   // wishlist에 과목 추가
-  async function addToWishlist(button) {
-    const row = button.closest("tr");
-    const code = row.getAttribute("data-code");
-    const section = row.getAttribute("data-section");
-    const studentId = localStorage.getItem("studentId");
-    const uniqueId = `${code}_${section}`;
+// ✅ 희망 추가
+async function addToWishlist(button) {
+  const row = button.closest("tr");
+  const code = row.getAttribute("data-code");
+  const section = row.getAttribute("data-section");
+  const studentId = localStorage.getItem("studentId");
+  const uniqueId = `${code}_${section}`;
+  const wishlistList = document.getElementById("wishlist-list");
+
+  // 이미 희망탭에 있으면 중복 방지
+  if (wishlistList.querySelector(`tr[data-unique-id="${uniqueId}"]`)) {
+    alert("이미 희망과목에 등록되어 있습니다.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/wishlist/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId, courseCode: code, section }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error("서버 저장 실패");
+
+    // ✅ 1) 로컬 상태 갱신
+    const wishlistMap = JSON.parse(localStorage.getItem("wishlistMap") || "{}");
+    wishlistMap[`${code}-${section}`] = true;
+    localStorage.setItem("wishlistMap", JSON.stringify(wishlistMap));
+
+    // ✅ 2) 희망탭에 행 추가
+    const newRow = row.cloneNode(true);
+    newRow.setAttribute("data-unique-id", uniqueId);
+
+    const wishlistBtn = newRow.querySelector(".wishlist-btn");
+    wishlistBtn.textContent = "♥";
+    wishlistBtn.classList.add("active");
+    wishlistBtn.setAttribute("onclick", "removeFromWishlist(this)");
+
+    wishlistList.appendChild(newRow);
+
+    // ✅ 3) 모든 탭 버튼 ♥ 동기화
+    updateWishlistInAllTabs(code, section, true);
+
+    alert("희망과목에 추가되었습니다.");
+  } catch (error) {
+    console.error("wishlist 추가 실패:", error);
+    alert("과목 추가에 실패했습니다.");
+  }
+  updateWishlistInAllTabs(code, section, true);
+}
+
+// ✅ 희망 해제
+async function removeFromWishlist(button) {
+  const row = button.closest("tr");
+  const code = row.getAttribute("data-code");
+  const section = row.getAttribute("data-section");
+  const studentId = localStorage.getItem("studentId");
+  const uniqueId = `${code}_${section}`;
+
+  try {
+    const res = await fetch("/wishlist/remove", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studentId, courseCode: code, section }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error("서버 삭제 실패");
+
+    // ✅ 1) 로컬 상태 갱신
+    const wishlistMap = JSON.parse(localStorage.getItem("wishlistMap") || "{}");
+    delete wishlistMap[`${code}-${section}`];
+    localStorage.setItem("wishlistMap", JSON.stringify(wishlistMap));
+
+    // ✅ 2) 희망탭에서 행 제거
     const wishlistList = document.getElementById("wishlist-list");
-  
-    if (wishlistList.querySelector(`tr[data-unique-id="${uniqueId}"]`)) {
-      alert("이미 희망과목에 등록되어 있습니다.");
+    const inWishlist = wishlistList.querySelector(`tr[data-unique-id="${uniqueId}"]`);
+    if (inWishlist) inWishlist.remove();
+
+    // ✅ 3) 모든 탭 버튼 ♡ 동기화
+    updateWishlistInAllTabs(code, section, false);
+
+    alert("희망과목에서 해지되었습니다.");
+  } catch (error) {
+    console.error("wishlist 제거 실패:", error);
+    alert("과목 제거에 실패했습니다.");
+  }
+  updateWishlistInAllTabs(code, section, false);
+}
+
+  // ✅ 재수강 과목 불러오기
+async function loadRetakeCourses() {
+  const studentId = localStorage.getItem("studentId");
+  const tbody = document.getElementById("retake-list");
+  tbody.innerHTML = "";
+
+  try {
+    const res = await fetch(`/retake-courses?studentId=${studentId}`);
+    const data = await res.json();
+    if (!data.success) throw new Error("재수강 과목 불러오기 실패");
+
+    if (data.courses.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="11">재수강 가능한 과목이 없습니다.</td></tr>`;
       return;
     }
-  
-    try {
-      const res = await fetch("/wishlist/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId, courseCode: code, section }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error("서버 저장 실패");
-  
-      // 클라이언트 UI 반영
-      const newRow = row.cloneNode(true);
-      newRow.setAttribute("data-unique-id", uniqueId);
-      const wishlistBtn = newRow.querySelector(".wishlist-btn");
-      wishlistBtn.textContent = "♥";
-      wishlistBtn.classList.add("active");
-      wishlistBtn.setAttribute("onclick", "removeFromWishlist(this)");
-      wishlistList.appendChild(newRow);
-  
-      button.textContent = "♥";
-      button.classList.add("active");
-      
-      alert("희망과목에 추가되었습니다.");
-    } catch (error) {
-      console.error("wishlist 추가 실패:", error);
-      alert("과목 추가에 실패했습니다.");
-    }
-    
+
+    // ✅ localStorage에 저장된 희망과목 불러오기
+    const wishlistMap = JSON.parse(localStorage.getItem("wishlistMap") || "{}");
+
+    data.courses.forEach(course => {
+      const key = `${course.COURSE_CODE}-${course.CLASS_SECTION}`;
+      const isWished = !!wishlistMap[key];
+
+      const row = document.createElement("tr");
+      row.setAttribute("data-code", course.COURSE_CODE);
+      row.setAttribute("data-section", course.CLASS_SECTION);
+      row.setAttribute("data-unique-id", `${course.COURSE_CODE}_${course.CLASS_SECTION}`);
+      row.innerHTML = `
+        <td>${course.MAJOR_CATEGORY}</td>
+        <td>
+          <button class="wishlist-btn ${isWished ? "active" : ""}" 
+                  onclick="${isWished ? "removeFromWishlist(this)" : "addToWishlist(this)"}">
+            ${isWished ? "♥" : "♡"}
+          </button>
+        </td>
+        <td>${course.YEAR_GRADE}</td>
+        <td>${course.COURSE_NAME}</td>
+        <td><input type="checkbox" onchange="toggleCourseConfirmation(this)" 
+                   data-course-code="${course.COURSE_CODE}" 
+                   data-class-section="${course.CLASS_SECTION}"></td>
+        <td>${course.COURSE_CODE}</td>
+        <td>${course.MAJOR_CATEGORY === '전공' ? 3 : 2}</td>
+        <td>${course.CLASS_SECTION}</td>
+        <td>${course.PROFESSOR_NAME}</td>
+        <td>${formatSchedule(course.DAY_OF_WEEK, course.S_TIME, course.E_TIME)}</td>
+        <td>${course.CAMPUS}</td>
+      `;
+      tbody.appendChild(row);
+    });
+
+    updateCheckboxes();
+  } catch (err) {
+    console.error("재수강 로딩 오류:", err);
+    tbody.innerHTML = `<tr><td colspan="11">재수강 과목을 불러오는 중 오류 발생</td></tr>`;
   }
-  
-  // wishlist에서 과목 제거
-  async function removeFromWishlist(button) {
-    const row = button.closest("tr");
-    const uniqueId = row.getAttribute("data-unique-id");
-    const [code, section] = uniqueId.split("_");
-    const studentId = localStorage.getItem("studentId");
-  
-    try {
-      const res = await fetch("/wishlist/remove", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId, courseCode: code, section }),
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error("서버 삭제 실패");
-  
-      // 클라이언트 UI 반영
-      row.parentNode.removeChild(row);
-  
-      const origRow = document.querySelector(`#course-list tr[data-code="${code}"][data-section="${section}"]`);
-      if (origRow) {
-        const origBtn = origRow.querySelector(".wishlist-btn");
-        origBtn.textContent = "♡";
-        origBtn.classList.remove("active");
-      }
-  
-      alert("희망과목에서 해지되었습니다.");
-    } catch (error) {
-      console.error("wishlist 제거 실패:", error);
-      alert("과목 제거에 실패했습니다.");
-    }
-  }
-  
-  // 페이지 로드 시 서버에서 wishlist 불러오기
-  document.addEventListener("DOMContentLoaded", function () {
-    loadWishlist();
-  });
+}
+
 
 // 로그아웃 함수
 function logout() {
@@ -631,19 +716,18 @@ function updateLocalStorage(courseCode, section, status) {
 
 // 수강신청 상태(체크박스) 업데이트
 function updateCheckboxes() {
-    const enrollmentStatus = JSON.parse(localStorage.getItem("enrollmentStatus") || "{}");
-    document.querySelectorAll("#course-list tr").forEach(row => {
-        const courseCode = row.getAttribute("data-code");
-        const section = row.getAttribute("data-section");
-        const key = `${courseCode}-${section}`;
-        const checkbox = row.querySelector("input[type='checkbox']");
-        if (checkbox) {
-            console.log(`체크박스 업데이트: ${key} → ${enrollmentStatus[key]}`);
-            checkbox.checked = enrollmentStatus[key] === "신청";
-        }
-    });
-    console.log("체크박스 업데이트 완료!");
+  const enrollmentStatus = JSON.parse(localStorage.getItem("enrollmentStatus") || "{}");
+  document.querySelectorAll("#course-list tr, #wishlist-list tr, #retake-list tr").forEach(row => {
+      const courseCode = row.getAttribute("data-code");
+      const section = row.getAttribute("data-section");
+      const key = `${courseCode}-${section}`;
+      const checkbox = row.querySelector("input[type='checkbox']");
+      if (checkbox) {
+          checkbox.checked = enrollmentStatus[key] === "신청";
+      }
+  });
 }
+
 
 function updateCheckboxInAllTabs(courseCode, section, isChecked) {
     const selector = `tr[data-code="${courseCode}"][data-section="${section}"] input[type="checkbox"]`;

@@ -345,7 +345,7 @@ web.get('/enrollments', (req, res) => {
   });
 });
 
-// 수강 신청 처리, 이미 취소된 경우 상태를 갱신
+// 수강 신청 처리, 재수강 로직 추가
 web.post('/enroll', (req, res) => {
     const { studentId, courseCode, section } = req.body;
 
@@ -353,85 +353,132 @@ web.post('/enroll', (req, res) => {
         return res.status(400).json({ success: false, message: '학생 ID가 필요합니다.' });
     }
 
-    // 1. 우선 해당 과목의 ID 및 최대 인원 조회
-    const courseInfoQuery = `
-        SELECT ID, MAX_STUDENTS FROM course
-        WHERE COURSE_CODE = ? AND CLASS_SECTION = ?;
-    `;
+    // --- 재수강 로직 추가 시작 ---
+    // 1. 학생의 과거 성적을 조회하여 재수강 가능한지 확인
+    // --- 재수강 로직 추가 시작 ---
+const gradeCheckQuery = `
+  SELECT a.TOT
+  FROM achievement a
+  JOIN course c ON a.COURSE_ID_ACH = c.ID
+  WHERE a.S_ID_ACH = ? AND c.COURSE_CODE = ? AND c.CLASS_SECTION = ?;
+`;
 
-    db.query(courseInfoQuery, [courseCode, section], (err, courseResult) => {
-        if (err || courseResult.length === 0) {
-            console.error("과목 정보 조회 오류:", err);
-            return res.json({ success: false, message: "과목 정보를 찾을 수 없습니다." });
-        }
+db.query(gradeCheckQuery, [studentId, courseCode, section], (err, gradeResult) => {
+  if (err) {
+      console.error("성적 조회 오류:", err);
+      return res.json({ success: false, message: "성적 조회 중 오류가 발생했습니다." });
+  }
 
-        const courseId = courseResult[0].ID;
-        const maxStudents = courseResult[0].MAX_STUDENTS;
+  if (gradeResult.length > 0) {
+      const previousScore = gradeResult[0].TOT;
 
-        // 2. 현재 신청 인원 수 조회
-        const countQuery = `
-            SELECT COUNT(*) AS currentCount FROM c_r
-            WHERE COURSE_ID_CR = ? AND STATUS = '신청';
+      // ✅ 총점(TOT) 기준으로 성적 환산
+      let previousGrade = '';
+      if (previousScore >= 95) previousGrade = 'A+';
+      else if (previousScore >= 90) previousGrade = 'A';
+      else if (previousScore >= 85) previousGrade = 'B+';
+      else if (previousScore >= 80) previousGrade = 'B';
+      else if (previousScore >= 75) previousGrade = 'C+';
+      else if (previousScore >= 70) previousGrade = 'C';
+      else if (previousScore >= 65) previousGrade = 'D+';
+      else if (previousScore >= 60) previousGrade = 'D';
+      else previousGrade = 'F';
+
+      if (['D+', 'D', 'F'].includes(previousGrade)) {
+          console.log(`학생 ${studentId}는 성적 ${previousGrade}(${previousScore}점)으로 재수강 가능합니다.`);
+          continueEnrollmentProcess();
+      } else {
+          return res.json({ success: false, message: `성적 ${previousGrade}(${previousScore}점)를 취득하여 재수강할 수 없습니다.` });
+      }
+  } else {
+      // 성적 기록이 없으면(처음 듣는 과목이면) 바로 수강 신청 진행
+      console.log(`학생 ${studentId}의 과거 수강 기록이 없어 바로 신청을 진행합니다.`);
+      continueEnrollmentProcess();
+  }
+});
+
+    // 재수강 로직 이후의 기존 수강 신청 로직을 함수로 묶음
+    function continueEnrollmentProcess() {
+        // 2. 해당 과목의 ID 및 최대 인원 조회
+        const courseInfoQuery = `
+            SELECT ID, MAX_STUDENTS FROM course
+            WHERE COURSE_CODE = ? AND CLASS_SECTION = ?;
         `;
 
-        db.query(countQuery, [courseId], (err, countResult) => {
-            if (err) {
-                console.error("신청 인원 조회 오류:", err);
-                return res.json({ success: false, message: "신청 인원 조회 오류" });
+        db.query(courseInfoQuery, [courseCode, section], (err, courseResult) => {
+            if (err || courseResult.length === 0) {
+                console.error("과목 정보 조회 오류:", err);
+                return res.json({ success: false, message: "과목 정보를 찾을 수 없습니다." });
             }
 
-            const currentCount = countResult[0].currentCount;
+            const courseId = courseResult[0].ID;
+            const maxStudents = courseResult[0].MAX_STUDENTS;
 
-            if (currentCount >= maxStudents) {
-                return res.json({ success: false, message: "신청 인원이 가득 찼습니다." });
-            }
-
-            // 3. 이미 신청/취소 여부 확인
-            const checkQuery = `
-                SELECT STATUS FROM c_r 
-                WHERE S_ID_CR = ? AND COURSE_ID_CR = ?;
+            // 3. 현재 신청 인원 수 조회
+            const countQuery = `
+                SELECT COUNT(*) AS currentCount FROM c_r
+                WHERE COURSE_ID_CR = ? AND STATUS = '신청';
             `;
 
-            db.query(checkQuery, [studentId, courseId], (err, result) => {
+            db.query(countQuery, [courseId], (err, countResult) => {
                 if (err) {
-                    console.error("DB 오류:", err);
-                    return res.json({ success: false, message: "DB 오류" });
+                    console.error("신청 인원 조회 오류:", err);
+                    return res.json({ success: false, message: "신청 인원 조회 오류" });
                 }
 
-                if (result.length > 0) {
-                    if (result[0].STATUS === '취소') {
-                        // 신청 상태로 업데이트
-                        const updateQuery = `
-                            UPDATE c_r SET STATUS = '신청'
-                            WHERE S_ID_CR = ? AND COURSE_ID_CR = ?;
+                const currentCount = countResult[0].currentCount;
+
+                if (currentCount >= maxStudents) {
+                    return res.json({ success: false, message: "신청 인원이 가득 찼습니다." });
+                }
+
+                // 4. 이미 신청/취소 여부 확인
+                const checkQuery = `
+                    SELECT STATUS FROM c_r 
+                    WHERE S_ID_CR = ? AND COURSE_ID_CR = ?;
+                `;
+
+                db.query(checkQuery, [studentId, courseId], (err, result) => {
+                    if (err) {
+                        console.error("DB 오류:", err);
+                        return res.json({ success: false, message: "DB 오류" });
+                    }
+
+                    if (result.length > 0) {
+                        if (result[0].STATUS === '취소') {
+                            // 신청 상태로 업데이트
+                            const updateQuery = `
+                                UPDATE c_r SET STATUS = '신청'
+                                WHERE S_ID_CR = ? AND COURSE_ID_CR = ?;
+                            `;
+                            db.query(updateQuery, [studentId, courseId], (err) => {
+                                if (err) {
+                                    console.error("업데이트 오류:", err);
+                                    return res.json({ success: false, message: "DB 오류" });
+                                }
+                                return res.json({ success: true });
+                            });
+                        } else {
+                            return res.json({ success: false, message: "이미 수강신청이 되어있습니다." });
+                        }
+                    } else {
+                        // 새로 신청
+                        const insertQuery = `
+                            INSERT INTO c_r (S_ID_CR, COURSE_ID_CR, STATUS)
+                            VALUES (?, ?, '신청');
                         `;
-                        db.query(updateQuery, [studentId, courseId], (err) => {
+                        db.query(insertQuery, [studentId, courseId], (err) => {
                             if (err) {
-                                console.error("업데이트 오류:", err);
+                                console.error("삽입 오류:", err);
                                 return res.json({ success: false, message: "DB 오류" });
                             }
                             return res.json({ success: true });
                         });
-                    } else {
-                        return res.json({ success: false, message: "이미 수강신청이 되어있습니다." });
                     }
-                } else {
-                    // 새로 신청
-                    const insertQuery = `
-                        INSERT INTO c_r (S_ID_CR, COURSE_ID_CR, STATUS)
-                        VALUES (?, ?, '신청');
-                    `;
-                    db.query(insertQuery, [studentId, courseId], (err) => {
-                        if (err) {
-                            console.error("삽입 오류:", err);
-                            return res.json({ success: false, message: "DB 오류" });
-                        }
-                        return res.json({ success: true });
-                    });
-                }
+                });
             });
         });
-    });
+    }
 });
 
 // 수강 취소 처리, 신청된 과목을 취소로 변경함
@@ -581,44 +628,65 @@ web.post('/submit-achievement', async (req, res) => {
   }
 });
 
-/*
-//전과목 끌고오기
+// 학생의 과거 성적을 포함한 전체 과목 목록 조회
+// studentId를 쿼리 파라미터로 받아 해당 학생의 성적 정보를 함께 반환합니다.
 web.get('/all-courses', (req, res) => {
+  const studentId = req.query.studentId;
+
   const query = `
     SELECT 
       c.COURSE_CODE, c.COURSE_NAME, c.CAMPUS, c.MAJOR_CATEGORY, c.FACULTY, 
       c.DEPARTMENT, c.YEAR_GRADE, c.CLASS_SECTION, c.P_ID_C, 
       c.MAX_STUDENTS, c.DAY_OF_WEEK, c.S_TIME, c.E_TIME,
-      p.NAME AS PROFESSOR_NAME 
+      p.NAME AS PROFESSOR_NAME,
+      a.TOT AS PREVIOUS_SCORE
     FROM hanseo.course c 
     LEFT JOIN hanseo.professor p ON c.P_ID_C = p.P_ID
+    LEFT JOIN hanseo.achievement a ON c.ID = a.COURSE_ID_ACH AND a.S_ID_ACH = ?
     WHERE c.OPEN_STATUS = '개설'
   `;
 
-  db.query(query, (err, results) => {
-    if (err) return res.status(500).json({ success: false });
+  db.query(query, [studentId], (err, results) => {
+    if (err) {
+      console.error("❌ DB 쿼리 오류:", err);
+      return res.status(500).json({ success: false });
+    }
     res.json({ success: true, courses: results });
   });
 });
-*/
 
-web.get('/all-courses', (req, res) => {
-  const query = `
-    SELECT 
-      c.COURSE_CODE, c.COURSE_NAME, c.CAMPUS, c.MAJOR_CATEGORY, c.FACULTY, 
-      c.DEPARTMENT, c.YEAR_GRADE, c.CLASS_SECTION, c.P_ID_C, 
-      c.MAX_STUDENTS, c.DAY_OF_WEEK, c.S_TIME, c.E_TIME,
-      p.NAME AS PROFESSOR_NAME 
-    FROM hanseo.course c 
-    LEFT JOIN hanseo.professor p ON c.P_ID_C = p.P_ID
-    WHERE c.OPEN_STATUS = '개설'
+// 재수강 과목 조회 (TOT 점수 기준: 70점 미만 → D+ 이하)
+web.get('/retake-courses', (req, res) => {
+  const studentId = req.query.studentId;
+
+  if (!studentId) {
+    return res.status(400).json({ success: false, message: '학생 ID가 필요합니다.' });
+  }
+
+  const sql = `
+    SELECT DISTINCT 
+      c.COURSE_CODE, c.COURSE_NAME, c.CAMPUS, c.MAJOR_CATEGORY, 
+      c.FACULTY, c.DEPARTMENT, c.YEAR_GRADE, c.CLASS_SECTION, 
+      c.P_ID_C, c.MAX_STUDENTS, c.DAY_OF_WEEK, c.S_TIME, c.E_TIME,
+      p.NAME AS PROFESSOR_NAME,
+      a.TOT AS PREVIOUS_SCORE
+    FROM course c
+    JOIN achievement a ON a.COURSE_ID_ACH = c.ID
+    JOIN professor p ON c.P_ID_C = p.P_ID
+    WHERE a.S_ID_ACH = ?
+      AND a.TOT < 70           -- 총점 70 미만이면 재수강 가능
+      AND c.OPEN_STATUS = '개설';
   `;
 
-  db.query(query, (err, results) => {
-    if (err) return res.status(500).json({ success: false });
+  db.query(sql, [studentId], (err, results) => {
+    if (err) {
+      console.error("재수강 과목 조회 오류:", err);
+      return res.status(500).json({ success: false, message: "DB 오류" });
+    }
     res.json({ success: true, courses: results });
   });
 });
+
 
 
 // 드롭다운 항목 불러오기 (학과, 전공, 학년)
@@ -825,5 +893,3 @@ web.get('/get-attendance-status', (req, res) => {
 web.listen(port, () => {
     console.log(`서버가 실행되었습니다. 접속 주소: http://localhost:${port}/login`)
 })
-
-
