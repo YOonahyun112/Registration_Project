@@ -545,9 +545,9 @@ function manageGrades() {
               <th>학년</th>
               <th>학과</th>
               <th>출석</th>
+              <th>과제</th>
               <th>중간고사</th>
               <th>기말고사</th>
-              <th>과제</th>
               <th>합계</th>
             </tr>
           </thead>
@@ -567,9 +567,10 @@ function manageGrades() {
                   <td>${student.YEAR_GRADE}</td>
                   <td>${student.DEPARTMENT}</td>
                   <td>${attInput}</td>
-                  <td><input type="number" placeholder="중간고사점수" oninput="calculateTotal(this)"></td>
-                  <td><input type="number" placeholder="기말고사점수" oninput="calculateTotal(this)"></td>
-                  <td><input type="number" placeholder="과제점수" oninput="calculateTotal(this)"></td>
+                   <td><input type="number" placeholder="최대20점" oninput="calculateTotal(this)"></td>
+                   <td><input type="number" placeholder="최대20점" oninput="calculateTotal(this)"></td>
+                  <td><input type="number" placeholder="최대30점" oninput="calculateTotal(this)"></td>
+                 
                   <td class="total-cell">0</td>
                 </tr>
               `;
@@ -617,10 +618,10 @@ async function saveGrades() {
     const absence = rollbookMap[studentId] || 0;
 
     let att = parseInt(inputs[0].value) || 0;
+    let assignment = parseInt(inputs[3].value) || 0;
     let midterm = parseInt(inputs[1].value) || 0;
     let finalExam = parseInt(inputs[2].value) || 0;
-    let assignment = parseInt(inputs[3].value) || 0;
-    let total = att + midterm + finalExam + assignment;
+    let total = att + assignment+ midterm + finalExam;
 
     const totalCell = row.querySelector('.total-cell');
 
