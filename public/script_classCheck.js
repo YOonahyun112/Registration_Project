@@ -513,28 +513,16 @@ function manageGrades() {
 
   const [courseCode, section] = selectedValue.split('-');
 
-  // 출결 데이터 + 학생 정보 동시 요청
-  Promise.all([
-    fetch(`/manage-attendance?courseCode=${courseCode}&section=${section}&professorId=${professorId}`).then(res => res.json()),
-    fetch(`/rollbook-data?courseCode=${courseCode}&section=${section}`).then(res => res.json())
-  ])
-    .then(([studentRes, rollbookRes]) => {
-      if (!studentRes.success || !rollbookRes.success) {
-        document.getElementById('details').innerHTML = '학생 또는 출결 정보를 불러오는 중 오류가 발생했습니다.';
+  // ✅ 성적 재조회
+  fetch(`/prof/grades?courseCode=${courseCode}&section=${section}&professorId=${professorId}`)
+    .then(res => res.json())
+    .then(data => {
+      if (!data.success) {
+        document.getElementById('details').innerHTML = '성적을 불러오는 중 오류가 발생했습니다.';
         return;
       }
 
-      const students = studentRes.students;
-      const attendanceData = rollbookRes.students;
-      const absenceMap = {};
-
-      attendanceData.forEach(stu => {
-        let count = 0;
-        for (let date in stu.attendance) {
-          if (stu.attendance[date] === '결석') count++;
-        }
-        absenceMap[stu.S_ID] = count;
-      });
+      const rows = data.grades || [];
 
       const tableHTML = `
         <table>
@@ -546,47 +534,48 @@ function manageGrades() {
               <th>학과</th>
               <th>출석</th>
               <th>과제</th>
-              <th>중간고사</th>
-              <th>기말고사</th>
+              <th>중간</th>
+              <th>기말</th>
               <th>합계</th>
+              <th>등급</th>
             </tr>
           </thead>
           <tbody>
-            ${students.map(student => {
-              const absence = absenceMap[student.S_ID] || 0;
-              const attInput = (absence >= 5)
-                ? `<input type="number" value="0" disabled>`
-                : `<input type="number" placeholder="출석점수" oninput="calculateTotal(this)">`;
+            ${rows.map(st => {
+              const ATT = st.ATT ?? '';
+              const ASSIGN = st.ASSIGNMENT ?? '';
+              const MID = st.MIDTERM ?? '';
+              const FIN = st.FINAL ?? '';
+              const TOT = st.TOT ?? 0;
+              const GRADE = st.GRADE ?? '';
 
               return `
                 <tr>
-                  <td>
-                  ${student.NAME}${student.IS_RETAKE ? ' <span style="color:red; font-size:0.8em;">(재)</span>' : ''}
-                  </td>
-                  <td>${student.S_ID}</td>
-                  <td>${student.YEAR_GRADE}</td>
-                  <td>${student.DEPARTMENT}</td>
-                  <td>${attInput}</td>
-                   <td><input type="number" placeholder="최대20점" oninput="calculateTotal(this)"></td>
-                   <td><input type="number" placeholder="최대20점" oninput="calculateTotal(this)"></td>
-                  <td><input type="number" placeholder="최대30점" oninput="calculateTotal(this)"></td>
-                 
-                  <td class="total-cell">0</td>
+                  <td>${st.STUDENT_NAME}</td>
+                  <td>${st.STUDENT_ID}</td>
+                  <td>${st.YEAR_GRADE}</td>
+                  <td>${st.DEPARTMENT}</td>
+                  <td><input type="number" placeholder="최대30" value="${ATT}" oninput="calculateTotal(this)"></td>
+                  <td><input type="number" placeholder="최대20" value="${ASSIGN}" oninput="calculateTotal(this)"></td>
+                  <td><input type="number" placeholder="최대20" value="${MID}" oninput="calculateTotal(this)"></td>
+                  <td><input type="number" placeholder="최대30" value="${FIN}" oninput="calculateTotal(this)"></td>
+                  <td class="total-cell">${TOT}</td>
+                  <td class="grade-cell">${GRADE}</td>
                 </tr>
               `;
             }).join('')}
           </tbody>
         </table>
-        <div style="text-align: right; margin-top: 10px;">
+        <div style="text-align:right; margin-top:10px;">
           <button class="submit-button" onclick="saveGrades()">성적 저장</button>
         </div>
       `;
 
       document.getElementById('details').innerHTML = tableHTML;
     })
-    .catch(error => {
-      console.error('성적 관리 로딩 오류:', error);
-      document.getElementById('details').innerHTML = '데이터를 불러오는 중 오류가 발생했습니다.';
+    .catch(err => {
+      console.error('성적 로딩 오류:', err);
+      document.getElementById('details').innerHTML = '성적을 불러오는 중 오류가 발생했습니다.';
     });
 
   highlightSelectedButton('gradesBtn');
@@ -651,6 +640,7 @@ async function saveGrades() {
   const result = await response.json();
   if (result.success) {
     alert('성적 저장 완료!');
+    manageGrades();
   } else {
     alert('성적 저장 실패');
   }
