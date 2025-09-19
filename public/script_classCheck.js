@@ -129,6 +129,7 @@ function manageAttendance() {
       console.error('출석 데이터 로드 실패:', err);
       document.getElementById('details').innerHTML = '학생 정보를 불러오는 중 오류가 발생했습니다.';
     });
+    highlightSelectedButton('attendanceBtn');
 }
 
 
