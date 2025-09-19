@@ -888,6 +888,20 @@ function handleKeywordSearch() {
 }
 window.handleKeywordSearch = handleKeywordSearch; // 버튼 연결용
 
+// Enter 키 입력으로도 검색 실행
+document.addEventListener("DOMContentLoaded", function () {
+  const keywordInput = document.getElementById("keywordInput");
+  if (keywordInput) {
+    keywordInput.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault(); // 새로고침 방지
+        handleKeywordSearch();  // 검색 실행
+      }
+    });
+  }
+});
+
+
 // 검색 결과 테이블 업데이트
 function updateCourseTable(courseList) {
     const tbody = document.getElementById("course-list");
