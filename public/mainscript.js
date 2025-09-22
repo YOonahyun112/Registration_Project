@@ -275,7 +275,14 @@ function generateTimetable() {
 // 위시리스트(희망과목) 관련 함수들
 function updateWishlistInAllTabs(courseCode, section, isWished) {
   const selector = `tr[data-code="${courseCode}"][data-section="${section}"] .wishlist-btn`;
-  document.querySelectorAll(selector).forEach(btn => {
+  const buttons = document.querySelectorAll(selector);
+
+  console.log("🔍 updateWishlistInAllTabs 실행",
+              "code:", courseCode,
+              "section:", section,
+              "찾은 버튼 개수:", buttons.length);
+
+  buttons.forEach(btn => {
     if (isWished) {
       btn.textContent = "♥";
       btn.classList.add("active");
@@ -287,7 +294,7 @@ function updateWishlistInAllTabs(courseCode, section, isWished) {
     }
   });
 }
-// 서버에서 wishlist 불러오기
+
 // 서버에서 wishlist 불러오기
 async function loadWishlist() {
   const studentId = localStorage.getItem("studentId");
@@ -306,16 +313,26 @@ async function loadWishlist() {
       const key = `${item.COURSE_CODE}-${item.CLASS_SECTION}`;
       wishlistMap[key] = true;
 
-      // ✅ 모든 탭 동기화
-      updateWishlistInAllTabs(item.COURSE_CODE, item.CLASS_SECTION, true);
-
-      // 희망 탭에 추가
+      // ✅ 개설과목 탭 원본 row 수정
       const row = document.querySelector(
         `#course-list tr[data-code="${item.COURSE_CODE}"][data-section="${item.CLASS_SECTION}"]`
       );
       if (row) {
+        const origBtn = row.querySelector(".wishlist-btn");
+        if (origBtn) {
+          origBtn.textContent = "♥";
+          origBtn.classList.add("active");
+          origBtn.setAttribute("onclick", "removeFromWishlist(this)");
+        }
+        // 희망 등록된 과목은 숨김 해제
+        row.classList.remove("hidden-course");
+      }
+
+      // ✅ 희망 탭에 복제 행 추가
+      if (row) {
         const newRow = row.cloneNode(true);
-        newRow.setAttribute("data-unique-id", `${item.COURSE_CODE}_${item.CLASS_SECTION}`);
+        newRow.setAttribute("data-unique-id", `${item.COURSE_CODE}-${item.CLASS_SECTION}`);
+        newRow.classList.remove("hidden-course");
 
         // 버튼 ♥ 로
         const wishlistBtn = newRow.querySelector(".wishlist-btn");
@@ -347,7 +364,7 @@ async function addToWishlist(button) {
   const code = row.getAttribute("data-code");
   const section = row.getAttribute("data-section");
   const studentId = localStorage.getItem("studentId");
-  const uniqueId = `${code}_${section}`;
+  const uniqueId = `${code}-${section}`;
   const wishlistList = document.getElementById("wishlist-list");
 
   // 이미 희망탭에 있으면 중복 방지
@@ -447,6 +464,7 @@ async function loadRetakeCourses() {
     }
 
     // ✅ localStorage에 저장된 희망과목 불러오기
+       await loadWishlist();
     const wishlistMap = JSON.parse(localStorage.getItem("wishlistMap") || "{}");
 
     data.courses.forEach(course => {
@@ -784,7 +802,9 @@ document.addEventListener("DOMContentLoaded", function () {
             console.error("네트워크 오류 발생:", error);
             alert("네트워크 오류가 발생했습니다.");
         });
-});
+        loadWishlist();
+});    
+
 
 // 탭 전환 및 저장 기능
 document.addEventListener("DOMContentLoaded", function() {
