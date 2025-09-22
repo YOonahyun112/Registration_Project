@@ -157,6 +157,7 @@ function handleFilterSearch() {
     }
   
     updateCheckboxes();
+    updateWishlistIcons();
   }
   
 
@@ -293,6 +294,30 @@ function updateWishlistInAllTabs(courseCode, section, isWished) {
       btn.setAttribute("onclick", "addToWishlist(this)");
     }
   });
+}
+
+
+//업데이트 코드 
+function updateWishlistIcons() {
+    const wishlistMap = JSON.parse(localStorage.getItem("wishlistMap") || "{}");
+    document.querySelectorAll("#course-list tr, #wishlist-list tr, #retake-list tr").forEach(row => {
+        const courseCode = row.getAttribute("data-code");
+        const section = row.getAttribute("data-section");
+        const key = `${courseCode}-${section}`;
+        const isWished = !!wishlistMap[key];
+        const btn = row.querySelector(".wishlist-btn");
+        if (btn) {
+            if (isWished) {
+                btn.textContent = "♥";
+                btn.classList.add("active");
+                btn.setAttribute("onclick", "removeFromWishlist(this)");
+            } else {
+                btn.textContent = "♡";
+                btn.classList.remove("active");
+                btn.setAttribute("onclick", "addToWishlist(this)");
+            }
+        }
+    });
 }
 
 // 서버에서 wishlist 불러오기
@@ -499,6 +524,7 @@ async function loadRetakeCourses() {
     });
 
     updateCheckboxes();
+    updateWishlistIcons()
   } catch (err) {
     console.error("재수강 로딩 오류:", err);
     tbody.innerHTML = `<tr><td colspan="11">재수강 과목을 불러오는 중 오류 발생</td></tr>`;
@@ -896,6 +922,7 @@ function handleKeywordSearch() {
         .then(data => {
             if (data.success && data.courses.length > 0) {
                 updateCourseTable(data.courses);
+                updateWishlistIcons();
             } else {
                 alert("일치하는 과목이 없습니다.");
                 updateCourseTable([]);
