@@ -598,6 +598,31 @@ web.get('/wishlist', (req, res) => {
   });
 });
 
+// web.js 파일의 마지막 부분에 추가
+
+web.get('/wishlist-courses', (req, res) => {
+    const studentId = req.query.studentId;
+
+    const query = `
+        SELECT 
+            c.COURSE_CODE, c.COURSE_NAME, c.MAJOR_CATEGORY, c.YEAR_GRADE, 
+            c.CLASS_SECTION, c.DAY_OF_WEEK, c.S_TIME, c.E_TIME, c.CAMPUS,
+            p.NAME AS PROFESSOR_NAME
+        FROM basket b
+        JOIN course c ON b.COURSE_ID_BK = c.ID
+        JOIN professor p ON c.P_ID_C = p.P_ID
+        WHERE b.S_ID_BK = ? AND b.PRIORITY = '희망'
+    `;
+
+    db.query(query, [studentId], (err, results) => {
+        if (err) {
+            console.error("❌ 희망 과목 상세 조회 오류:", err);
+            return res.status(500).json({ success: false, message: "DB 오류" });
+        }
+        res.json({ success: true, courses: results });
+    });
+});
+
 //교수용 성적 저장 처리, 기존 성적이 있으면 update, 없으면 insert
 web.post('/submit-achievement', async (req, res) => {
   const grades = req.body.grades;
