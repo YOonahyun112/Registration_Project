@@ -454,64 +454,77 @@ async function removeFromWishlist(button) {
 }
 
   // ✅ 재수강 과목 불러오기
+// mainscript.js 파일의 loadRetakeCourses 함수
+
 async function loadRetakeCourses() {
-  const studentId = localStorage.getItem("studentId");
-  const tbody = document.getElementById("retake-list");
-  tbody.innerHTML = "";
+    const studentId = localStorage.getItem("studentId");
+    const tbody = document.getElementById("retake-list");
 
-  try {
-    const res = await fetch(`/retake-courses?studentId=${studentId}`);
-    const data = await res.json();
-    if (!data.success) throw new Error("재수강 과목 불러오기 실패");
+    // ✅ 로딩 중임을 표시하는 클래스 추가
+    tbody.classList.add('loading');
+    
+    // 이전에 알려드렸던 opacity 효과도 같이 적용됩니다.
+    tbody.classList.add('loading-fade');
 
-    if (data.courses.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="11">재수강 가능한 과목이 없습니다.</td></tr>`;
-      return;
+    tbody.innerHTML = `<tr><td colspan="11" class="loading-cell">로딩 중...</td></tr>`; // 로딩 메시지 추가
+
+    try {
+        const res = await fetch(`/retake-courses?studentId=${studentId}`);
+        const data = await res.json();
+        if (!data.success) throw new Error("재수강 과목 불러오기 실패");
+        
+        // 데이터 로딩 성공 후, 로딩 메시지를 지웁니다.
+        tbody.innerHTML = "";
+        
+        if (data.courses.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="11">재수강 가능한 과목이 없습니다.</td></tr>`;
+        } else {
+            // ... (기존 과목 목록을 그리는 코드)
+            await loadWishlist();
+            const wishlistMap = JSON.parse(localStorage.getItem("wishlistMap") || "{}");
+
+            data.courses.forEach(course => {
+                const key = `${course.COURSE_CODE}-${course.CLASS_SECTION}`;
+                const isWished = !!wishlistMap[key];
+                const row = document.createElement("tr");
+                row.setAttribute("data-code", course.COURSE_CODE);
+                row.setAttribute("data-section", course.CLASS_SECTION);
+                row.setAttribute("data-unique-id", `${course.COURSE_CODE}_${course.CLASS_SECTION}`);
+                row.innerHTML = `
+                    <td>${course.MAJOR_CATEGORY}</td>
+                    <td>
+                        <button class="wishlist-btn ${isWished ? "active" : ""}" 
+                            onclick="${isWished ? "removeFromWishlist(this)" : "addToWishlist(this)"}">
+                            ${isWished ? "♥" : "♡"}
+                        </button>
+                    </td>
+                    <td>${course.YEAR_GRADE}</td>
+                    <td>${course.COURSE_NAME}</td>
+                    <td><input type="checkbox" onchange="toggleCourseConfirmation(this)" 
+                            data-course-code="${course.COURSE_CODE}" 
+                            data-class-section="${course.CLASS_SECTION}"></td>
+                    <td>${course.COURSE_CODE}</td>
+                    <td>${course.MAJOR_CATEGORY === '전공' ? 3 : 2}</td>
+                    <td>${course.CLASS_SECTION}</td>
+                    <td>${course.PROFESSOR_NAME}</td>
+                    <td>${formatSchedule(course.DAY_OF_WEEK, course.S_TIME, course.E_TIME)}</td>
+                    <td>${course.CAMPUS}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            updateCheckboxes();
+            updateWishlistIcons();
+        }
+
+    } catch (err) {
+        console.error("재수강 로딩 오류:", err);
+        tbody.innerHTML = `<tr><td colspan="11">재수강 과목을 불러오는 중 오류 발생</td></tr>`;
+    } finally {
+        // ✅ 로딩 완료 후 클래스 제거
+        tbody.classList.remove('loading-fade');
+        tbody.classList.remove('loading');
     }
-
-    // ✅ localStorage에 저장된 희망과목 불러오기
-       await loadWishlist();
-    const wishlistMap = JSON.parse(localStorage.getItem("wishlistMap") || "{}");
-
-    data.courses.forEach(course => {
-      const key = `${course.COURSE_CODE}-${course.CLASS_SECTION}`;
-      const isWished = !!wishlistMap[key];
-
-      const row = document.createElement("tr");
-      row.setAttribute("data-code", course.COURSE_CODE);
-      row.setAttribute("data-section", course.CLASS_SECTION);
-      row.setAttribute("data-unique-id", `${course.COURSE_CODE}_${course.CLASS_SECTION}`);
-      row.innerHTML = `
-        <td>${course.MAJOR_CATEGORY}</td>
-        <td>
-          <button class="wishlist-btn ${isWished ? "active" : ""}" 
-                  onclick="${isWished ? "removeFromWishlist(this)" : "addToWishlist(this)"}">
-            ${isWished ? "♥" : "♡"}
-          </button>
-        </td>
-        <td>${course.YEAR_GRADE}</td>
-        <td>${course.COURSE_NAME}</td>
-        <td><input type="checkbox" onchange="toggleCourseConfirmation(this)" 
-                   data-course-code="${course.COURSE_CODE}" 
-                   data-class-section="${course.CLASS_SECTION}"></td>
-        <td>${course.COURSE_CODE}</td>
-        <td>${course.MAJOR_CATEGORY === '전공' ? 3 : 2}</td>
-        <td>${course.CLASS_SECTION}</td>
-        <td>${course.PROFESSOR_NAME}</td>
-        <td>${formatSchedule(course.DAY_OF_WEEK, course.S_TIME, course.E_TIME)}</td>
-        <td>${course.CAMPUS}</td>
-      `;
-      tbody.appendChild(row);
-    });
-
-    updateCheckboxes();
-    updateWishlistIcons()
-  } catch (err) {
-    console.error("재수강 로딩 오류:", err);
-    tbody.innerHTML = `<tr><td colspan="11">재수강 과목을 불러오는 중 오류 발생</td></tr>`;
-  }
 }
-
 
 // 로그아웃 함수
 function logout() {

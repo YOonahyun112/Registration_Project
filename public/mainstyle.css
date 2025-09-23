@@ -343,4 +343,16 @@ input[type="checkbox"] {
     font-size: 0.8em;
     color: #555;
   }
-  
+/* styles.css 파일에 아래 코드를 추가합니다. */
+
+/* 로딩 중 최소 높이를 유지하여 덜컹거림 방지 */
+.loading {
+    min-height: 100px; /* 테이블에 적당한 높이로 설정 */
+    text-align: center;
+    padding-top: 20px;
+}
+
+.loading-cell {
+    font-style: italic;
+    color: #888;
+}
