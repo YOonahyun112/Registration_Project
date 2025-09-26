@@ -65,15 +65,21 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const currentDepartment = localStorage.getItem("department");
       const currentYearGrade = localStorage.getItem("yearGrade");
+      const enrollmentStatus = JSON.parse(localStorage.getItem("enrollmentStatus") || "{}");
 
       const tbody = document.getElementById("course-list");
       tbody.innerHTML = "";
 
-        originalCourseList = data.courses.filter(course => {
+      originalCourseList = data.courses.filter(course => {
+        const key = `${course.COURSE_CODE}-${course.CLASS_SECTION}`;
+        const isEnrolled = enrollmentStatus[key] === "신청";  // ✅ 이미 신청한 과목 여부 확인
+
         const isSameMajor = course.DEPARTMENT === currentDepartment;
         const isSameGrade = course.YEAR_GRADE === String(currentYearGrade) || course.YEAR_GRADE === "1,2,3,4";
         const isMajor = course.MAJOR_CATEGORY === "전공";
-        return isMajor && isSameMajor && isSameGrade;
+
+        // ✅ 신청한 과목은 무조건 표시, 아니면 권장 과목만 표시
+        return isEnrolled || (isMajor && isSameMajor && isSameGrade);
       }).map(course => {
         const rowElement = buildCourseRow(course);
         tbody.appendChild(rowElement);
@@ -88,6 +94,7 @@ document.addEventListener("DOMContentLoaded", function () {
     })
     .catch(err => console.error("초기 과목 로딩 실패:", err));
 });
+
 
 
   //백에서 전체 과목 데이터 받아 originalCourseList에 저장하고,html 테이블에 한줄씩 추가
