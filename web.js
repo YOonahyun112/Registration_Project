@@ -46,7 +46,8 @@ web.post('/loginProc', (req, res) => {
               username: studentName, // 이름을 username에 할당
               userdepartment: department,
               useryeargrade: yearGrade,
-              message: "학생 로그인 성공"
+              message: "학생 로그인 성공",
+              defaultTab: "courses"
           });
       } else {
           // 학생이 아니라면 교수 테이블도 확인

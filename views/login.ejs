@@ -59,6 +59,7 @@
                     localStorage.setItem("studentId", formData.studentId);
                     localStorage.setItem("department", data.userdepartment);
                     localStorage.setItem("yearGrade",  data.useryeargrade);
+                    localStorage.setItem("activeTab", data.defaultTab || "courses");
                     window.location.href = "/main";
 
                     alert(data.message); 
